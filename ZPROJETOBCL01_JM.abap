@@ -26,7 +26,8 @@ CLASS zprojetobcl01_jm DEFINITION
         !iv_p0002 TYPE p0002
         !iv_ano TYPE char4
         !iv_mes TYPE char2 .
-    METHODS exibe .
+    METHODS alv .
+    METHODS smart .
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -35,11 +36,11 @@ CLASS zprojetobcl01_jm DEFINITION
     DATA mt_zprojetobt02 TYPE ty_zprojetobt02 .
     DATA mt_zprojetobt03 TYPE ty_zprojetobt03 .
     DATA:
-      mt_t001  TYPE TABLE OF t001 .               "Descrição empresas
+      mt_t001  TYPE TABLE OF t001 .                 "Descrição empresas
     DATA:
-      mt_t500p TYPE TABLE OF t500p .               "Descrição área de RH
+      mt_t500p TYPE TABLE OF t500p .                 "Descrição área de RH
     DATA:
-      mt_t001p TYPE TABLE OF t001p .               "Descrição subárea de RH
+      mt_t001p TYPE TABLE OF t001p .                 "Descrição subárea de RH
 
     METHODS processar_dias
       IMPORTING
@@ -59,6 +60,50 @@ ENDCLASS.                    "ZPROJETOBCL01_JM DEFINITION
 *
 *----------------------------------------------------------------------*
 CLASS zprojetobcl01_jm IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZPROJETOBCL01_JM->ALV
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD alv.
+
+    DATA: mo_alv     TYPE REF TO cl_salv_table,
+          mo_columns TYPE REF TO cl_salv_columns_table,
+          mo_zebra   TYPE REF TO cl_salv_display_settings,
+          gr_columns TYPE REF TO cl_salv_columns_table,
+          gr_column  TYPE REF TO cl_salv_column.
+
+    CALL METHOD cl_salv_table=>factory
+      IMPORTING
+        r_salv_table = mo_alv
+      CHANGING
+        t_table      = mt_saida.
+
+*   Otimiza tamanho das colunas
+    mo_columns = mo_alv->get_columns( ). "Retorna o objeto tipo coluna INSTANCIADO
+    mo_columns->set_optimize( ).
+
+*   Zebrar report
+    mo_zebra = mo_alv->get_display_settings( ).
+    mo_zebra->set_striped_pattern( abap_true ).
+
+    "Obtem as colunas
+    gr_columns = mo_alv->get_columns( ).
+
+*     Métodos que recebem uma coluna a ser oculta e na sequência oculta a mesma
+*------------------------------------------------------------------------------
+    TRY.
+        gr_column ?= gr_columns->get_column( 'MES' ).
+        gr_column->set_technical( value = if_salv_c_bool_sap=>true ).
+        gr_column ?= gr_columns->get_column( 'ANO' ).
+        gr_column->set_technical( value = if_salv_c_bool_sap=>true ).
+      CATCH cx_salv_not_found.
+    ENDTRY.
+
+    mo_alv->display( ). "Imprime na tela do relatório ALV
+
+  ENDMETHOD.                    "exibe
 
 
 * <SIGNATURE>---------------------------------------------------------------------------------------+
@@ -105,35 +150,6 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
       LEAVE LIST-PROCESSING.
     ENDIF.
   ENDMETHOD.                    "constructor
-
-
-* <SIGNATURE>---------------------------------------------------------------------------------------+
-* | Instance Public Method ZPROJETOBCL01_JM->EXIBE
-* +-------------------------------------------------------------------------------------------------+
-* +--------------------------------------------------------------------------------------</SIGNATURE>
-  METHOD exibe.
-
-    DATA: mo_alv TYPE REF TO cl_salv_table,
-          mo_columns TYPE REF TO cl_salv_columns_table,
-          mo_zebra TYPE REF TO cl_salv_display_settings.
-
-    CALL METHOD cl_salv_table=>factory
-      IMPORTING
-        r_salv_table = mo_alv
-      CHANGING
-        t_table      = mt_saida.
-
-*   Otimiza tamanho das colunas
-    mo_columns = mo_alv->get_columns( ). "Retorna o objeto tipo coluna INSTANCIADO
-    mo_columns->set_optimize( ).
-
-*   Zebrar report
-    mo_zebra = mo_alv->get_display_settings( ).
-    mo_zebra->set_striped_pattern( abap_true ).
-
-    mo_alv->display( ). "Imprime na tela do relatório ALV
-
-  ENDMETHOD.                    "exibe
 
 
 * <SIGNATURE>---------------------------------------------------------------------------------------+
@@ -229,6 +245,9 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
         ms_saida-vlr_fin = ms_saida-vlr_men - ( ms_saida-vlr_men * ( ms_zprojetobt02-perc / 100 ) ).
       ENDIF.
 
+      ms_saida-mes     = iv_mes.
+      ms_saida-ano     = iv_ano.
+
       APPEND ms_saida TO mt_saida.
     ENDLOOP.
 
@@ -322,4 +341,91 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
     cv_dias   = lv_total_dias - lv_dias_descon.
 
   ENDMETHOD.                    "processar_dias
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZPROJETOBCL01_JM->SMART
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD smart.
+
+*     Declarações do smartform
+*----------------------------------------------------------------------------------------------------
+    DATA: lv_fm_name            TYPE rs38l_fnam,
+          ls_control_parameters TYPE ssfctrlop,
+          ls_output_options     TYPE ssfcompop,
+          ls_job_output_info    TYPE ssfcrescl,
+          ls_saida              TYPE zprojetobs01_jm. "Do tipo da estrutura SE11 criada para exibição
+
+*     Loop na tabela final (Enviando dados via WORK-AREA para o Smartform)
+*-------------------------------------------------------------------------------------------------------
+    LOOP AT mt_saida INTO ls_saida.
+
+*     Declarações de variáveis a serem utilizadas no Case que verifica a quantidade de páginas via LOOP
+*------------------------------------------------------------------------------------------------------
+      DATA: lv_lines TYPE i,
+            lv_tabix TYPE sy-tabix.
+
+      "Atribuição de contador
+      lv_tabix = sy-tabix.
+
+*     Função que passa uma estrutura para o Smartform e exibe-o (Necessário método de importação FM_NAME)
+*--------------------------------------------------------------------------------------------------------
+      CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+        EXPORTING
+          formname           = 'ZPROJETOBSF01_JM'
+        IMPORTING
+          fm_name            = lv_fm_name "Função definida abaixo
+        EXCEPTIONS
+          no_form            = 1
+          no_function_module = 2
+          OTHERS             = 3.
+
+      "Definições de saída do Smartform
+      ls_output_options-tddest        = 'LP01'.
+      ls_output_options-tdimmed       = abap_true.
+      ls_control_parameters-no_dialog = abap_true.
+      ls_control_parameters-preview   = abap_true.
+
+*     Case para verificar quantidade de páginas a serem exibidas
+*---------------------------------------------------------------
+      DESCRIBE TABLE mt_saida LINES lv_lines.
+
+      CASE lv_tabix.
+        WHEN 1.
+          ls_control_parameters-no_open = abap_false.
+          ls_control_parameters-no_close = abap_true.
+        WHEN OTHERS.
+          ls_control_parameters-no_open = abap_true.
+          ls_control_parameters-no_close = abap_true.
+      ENDCASE.
+
+      IF lv_lines EQ 1.
+        ls_control_parameters-no_open = abap_false.
+        ls_control_parameters-no_close = abap_false.
+      ELSEIF sy-tabix EQ lv_lines.
+        ls_control_parameters-no_open = abap_true.
+        ls_control_parameters-no_close = abap_false.
+      ENDIF.
+
+*     Função que importa a estrutura do programa para dentro do Smartform (Necessária para o primeiro método funcionar)
+*----------------------------------------------------------------------------------------------------------------------
+      CALL FUNCTION lv_fm_name
+        EXPORTING
+          control_parameters = ls_control_parameters
+          output_options     = ls_output_options
+          user_settings      = space
+          is_saida           = ls_saida "No Smartform é necessário ter a variável job declarada com o mesmo tipo da estrutura global
+        IMPORTING
+          job_output_info    = ls_job_output_info
+        EXCEPTIONS
+          formatting_error   = 1
+          internal_error     = 2
+          send_error         = 3
+          user_canceled      = 4
+          OTHERS             = 5.
+
+    ENDLOOP.
+
+  ENDMETHOD.                    "smart
 ENDCLASS.                    "ZPROJETOBCL01_JM IMPLEMENTATION

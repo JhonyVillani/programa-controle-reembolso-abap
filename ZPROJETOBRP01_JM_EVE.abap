@@ -42,4 +42,9 @@
 
   END-OF-SELECTION.
 
-    go_reembolso->exibe( ).
+CASE abap_true.
+  WHEN p_alv.
+    go_reembolso->alv( ).
+  WHEN p_smart.
+    go_reembolso->smart( ).
+ENDCASE.
