@@ -23,7 +23,9 @@ CLASS zprojetobcl01_jm DEFINITION
     METHODS processa
       IMPORTING
         !iv_p0001 TYPE p0001
-        !iv_p0002 TYPE p0002 .
+        !iv_p0002 TYPE p0002
+        !iv_ano TYPE char4
+        !iv_mes TYPE char2 .
     METHODS exibe .
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -32,13 +34,21 @@ CLASS zprojetobcl01_jm DEFINITION
     DATA mt_zprojetobt01 TYPE ty_zprojetobt01 .
     DATA mt_zprojetobt02 TYPE ty_zprojetobt02 .
     DATA mt_zprojetobt03 TYPE ty_zprojetobt03 .
+    DATA:
+      mt_t001  TYPE TABLE OF t001 .               "Descrição empresas
+    DATA:
+      mt_t500p TYPE TABLE OF t500p .               "Descrição área de RH
+    DATA:
+      mt_t001p TYPE TABLE OF t001p .               "Descrição subárea de RH
 
-    DATA:
-     mt_t001  TYPE TABLE OF t001 .              "Descrição empresas
-    DATA:
-      mt_t500p TYPE TABLE OF t500p .             "Descrição área de RH
-    DATA:
-      mt_t001p TYPE TABLE OF t001p .             "Descrição subárea de RH
+    METHODS processar_dias
+      IMPORTING
+        !iv_descfds TYPE zprojetobde08_jm
+        !iv_ano TYPE char4
+        !iv_mes TYPE char2
+      CHANGING
+        !cv_diasdesc TYPE zprojetobde10_jm
+        !cv_dias TYPE zprojetobde11_jm .
 ENDCLASS.                    "ZPROJETOBCL01_JM DEFINITION
 
 
@@ -131,6 +141,8 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
 * +-------------------------------------------------------------------------------------------------+
 * | [--->] IV_P0001                       TYPE        P0001
 * | [--->] IV_P0002                       TYPE        P0002
+* | [--->] IV_ANO                         TYPE        CHAR4
+* | [--->] IV_MES                         TYPE        CHAR2
 * +--------------------------------------------------------------------------------------</SIGNATURE>
   METHOD processa.
 
@@ -147,6 +159,10 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
           ms_zprojetobt01 TYPE zprojetobt01_jm.
 
     LOOP AT mt_zprojetobt03 INTO ms_zprojetobt03.
+
+      IF iv_p0001-bukrs NE ms_zprojetobt03-bukrs.
+        CONTINUE.
+      ENDIF.
 
 *     Leitura de Campos complementares
 *--------------------------------------------------------------------------------------------------------
@@ -189,17 +205,121 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
       ms_saida-descr   = ms_zprojetobt01-descr.
       ms_saida-vlr_dia = ms_zprojetobt01-vlr_dia.
       ms_saida-descfds = ms_zprojetobt03-descfds.
-*   ms_saida- dias descontados "Criar
-*   ms_saida- dias "Criar
+
+*     Método que calcula os dias úteis
+*------------------------------------------------
+      me->processar_dias(
+              EXPORTING
+               iv_descfds  = ms_saida-descfds
+               iv_mes      = iv_mes
+               iv_ano      = iv_ano
+              CHANGING
+               cv_diasdesc = ms_saida-diasdesc
+               cv_dias     = ms_saida-dias ).
+
       ms_saida-regra   = ms_zprojetobt02-regra.
       ms_saida-opera   = ms_zprojetobt02-opera.
       ms_saida-perc    = ms_zprojetobt02-perc.
       ms_saida-descfds = ms_zprojetobt03-descfds.
-*   ms_saida-valor mensal "Criar
-*   ms_saida-valor FINAL "Criar
+      ms_saida-vlr_men = ms_saida-vlr_dia * ms_saida-dias.
+
+      IF ms_zprojetobt02-opera EQ '+'.
+        ms_saida-vlr_fin = ms_saida-vlr_men + ( ms_saida-vlr_men * ( ms_zprojetobt02-perc / 100 ) ).
+      ELSE.
+        ms_saida-vlr_fin = ms_saida-vlr_men - ( ms_saida-vlr_men * ( ms_zprojetobt02-perc / 100 ) ).
+      ENDIF.
 
       APPEND ms_saida TO mt_saida.
     ENDLOOP.
 
   ENDMETHOD.                    "processa
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZPROJETOBCL01_JM->PROCESSAR_DIAS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_DESCFDS                     TYPE        ZPROJETOBDE08_JM
+* | [--->] IV_ANO                         TYPE        CHAR4
+* | [--->] IV_MES                         TYPE        CHAR2
+* | [<-->] CV_DIASDESC                    TYPE        ZPROJETOBDE10_JM
+* | [<-->] CV_DIAS                        TYPE        ZPROJETOBDE11_JM
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD processar_dias.
+
+    DATA: lv_dias_descon TYPE char2,
+          lv_dat1        TYPE sy-datum,
+          lv_dat2        TYPE sy-datum,
+          lv_prox_mes    TYPE char2,
+          lv_mes_cast    TYPE t009b-bumon,
+          lv_ano_cast    TYPE t009b-bdatj,
+          lv_total_dias  TYPE t009b-butag,
+          lt_dias_uteis  TYPE TABLE OF rke_dat.
+
+    lv_dias_descon = '0'.
+    lv_dat1        = iv_ano && iv_mes && '01'.
+    lv_prox_mes    = iv_mes + 1.
+    lv_mes_cast    = iv_mes.
+    lv_ano_cast    = iv_ano.
+
+    IF iv_mes < 10.
+      lv_dat2 = iv_ano && '0' && lv_prox_mes && '01'.
+    ELSE.
+      IF lv_prox_mes EQ '13'.
+        DATA: lv_prox_ano TYPE char4.
+
+        lv_prox_ano = iv_ano.
+
+        ADD 1 TO lv_prox_ano.
+
+        lv_dat2 = lv_prox_ano && '01' && '01'.
+      ELSE.
+        lv_dat2 = iv_ano && lv_prox_mes && '01'.
+      ENDIF.
+    ENDIF.
+
+    lv_dat2 = lv_dat2 - 1.
+
+    CALL FUNCTION 'RKE_SELECT_FACTDAYS_FOR_PERIOD'
+      EXPORTING
+        i_datab               = lv_dat1
+        i_datbi               = lv_dat2
+        i_factid              = 'BR'
+      TABLES
+        eth_dats              = lt_dias_uteis
+      EXCEPTIONS
+        date_conversion_error = 1
+        OTHERS                = 2.
+
+    IF sy-subrc EQ 2.
+      MESSAGE s001(00) WITH text-m01 DISPLAY LIKE 'E'.
+
+      "Retorna para a tela de seleção
+      LEAVE LIST-PROCESSING.
+
+*    RAISE EXCEPTION TYPE lcx_erro_fatal
+*      EXPORTING
+*        iv_codigo = '005'.
+    ENDIF.
+
+    CALL FUNCTION 'NUMBER_OF_DAYS_PER_MONTH_GET'
+      EXPORTING
+        par_month = lv_mes_cast
+        par_year  = lv_ano_cast
+      IMPORTING
+        par_days  = lv_total_dias.
+
+    IF iv_descfds EQ 'S'.
+
+      DATA: lv_total_uteis TYPE char2.
+      DESCRIBE TABLE lt_dias_uteis LINES lv_total_uteis.
+
+      lv_dias_descon = lv_total_dias - lv_total_uteis.
+
+    ENDIF.
+
+    cv_diasdesc = lv_dias_descon.
+
+    cv_dias   = lv_total_dias - lv_dias_descon.
+
+  ENDMETHOD.                    "processar_dias
 ENDCLASS.                    "ZPROJETOBCL01_JM IMPLEMENTATION
