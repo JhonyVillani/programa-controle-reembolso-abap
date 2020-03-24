@@ -68,6 +68,11 @@
 
   END-OF-SELECTION.
 
+*     Prepara a exibição dos dados caso exista(m) resultado(s)
+*-------------------------------------------------------------
+    "Verifica se a tabela está vazia
+    go_reembolso->verifica( ).
+
     CASE abap_true.
       WHEN p_alv.
         go_reembolso->alv( ).

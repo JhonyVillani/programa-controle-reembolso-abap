@@ -33,6 +33,7 @@ CLASS zprojetobcl01_jm DEFINITION
         !ev_directory TYPE rlgrap-filename .
     CLASS-METHODS verifica_diretorio .
     METHODS converte .
+    METHODS verifica .
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -586,6 +587,24 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
     ENDLOOP.
 
   ENDMETHOD.                    "smart
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZPROJETOBCL01_JM->VERIFICA
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD verifica.
+
+*     Verifica se a tabela está vazia e retorna para a tela de seleção
+*---------------------------------------------------------------------
+    IF mt_saida IS INITIAL.
+      MESSAGE s208(00) WITH text-m03 DISPLAY LIKE 'E'.
+
+      "Retorna à tela de seleção
+      LEAVE LIST-PROCESSING.
+    ENDIF.
+
+  ENDMETHOD.                    "verifica
 
 
 * <SIGNATURE>---------------------------------------------------------------------------------------+
