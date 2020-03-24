@@ -28,6 +28,11 @@ CLASS zprojetobcl01_jm DEFINITION
         !iv_mes TYPE char2 .
     METHODS alv .
     METHODS smart .
+    CLASS-METHODS browse_popup
+      EXPORTING
+        !ev_directory TYPE rlgrap-filename .
+    CLASS-METHODS verifica_diretorio .
+    METHODS converte .
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -36,11 +41,12 @@ CLASS zprojetobcl01_jm DEFINITION
     DATA mt_zprojetobt02 TYPE ty_zprojetobt02 .
     DATA mt_zprojetobt03 TYPE ty_zprojetobt03 .
     DATA:
-      mt_t001  TYPE TABLE OF t001 .                 "Descrição empresas
+      mt_t001  TYPE TABLE OF t001 .                   "Descrição empresas
     DATA:
-      mt_t500p TYPE TABLE OF t500p .                 "Descrição área de RH
+      mt_t500p TYPE TABLE OF t500p .                   "Descrição área de RH
     DATA:
-      mt_t001p TYPE TABLE OF t001p .                 "Descrição subárea de RH
+      mt_t001p TYPE TABLE OF t001p .                   "Descrição subárea de RH
+    CLASS-DATA mv_directory TYPE rlgrap-filename .
 
     METHODS processar_dias
       IMPORTING
@@ -107,6 +113,35 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
 
 
 * <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Static Public Method ZPROJETOBCL01_JM=>BROWSE_POPUP
+* +-------------------------------------------------------------------------------------------------+
+* | [<---] EV_DIRECTORY                   TYPE        RLGRAP-FILENAME
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD browse_popup.
+
+*     Declarações de variáveis da função directory_browse
+*--------------------------------------------------------
+    DATA: lv_fullpath    TYPE string.
+
+*     Função que abre a caixa de diálogo no Select-Options
+*---------------------------------------------------------
+    CALL METHOD cl_gui_frontend_services=>directory_browse
+      CHANGING
+        selected_folder      = lv_fullpath
+      EXCEPTIONS
+        cntl_error           = 1
+        error_no_gui         = 2
+        not_supported_by_gui = 3
+        OTHERS               = 4.
+
+    ev_directory = lv_fullpath.
+
+    mv_directory = ev_directory.
+
+  ENDMETHOD.                    "browse_popup
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
 * | Instance Public Method ZPROJETOBCL01_JM->CONSTRUCTOR
 * +-------------------------------------------------------------------------------------------------+
 * +--------------------------------------------------------------------------------------</SIGNATURE>
@@ -150,6 +185,129 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
       LEAVE LIST-PROCESSING.
     ENDIF.
   ENDMETHOD.                    "constructor
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZPROJETOBCL01_JM->CONVERTE
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD converte.
+
+*     verifica se o campo path está preenchido
+*--------------------------------------------------------------
+    IF mv_directory IS NOT INITIAL.
+
+      "Define um TYPES com saídas em formato de STRING
+      TYPES: BEGIN OF ty_s_linha_arquivo,
+              line TYPE c LENGTH 1000,
+             END OF   ty_s_linha_arquivo.
+
+      "Declarações de variáveis a serem utilizadas na função DOWNLOAD
+      DATA: lv_filename TYPE string,
+            lt_data_tab TYPE TABLE OF ty_s_linha_arquivo,
+            ls_data_tab TYPE ty_s_linha_arquivo,
+            ls_saida    TYPE zprojetobs01_jm.
+
+*     Definindo "Header Line" dinamicamente da tabela a ser exportada
+*-----------------------------------------------------------------------------------
+      DATA: fieldcat   TYPE lvc_t_fcat.
+      DATA: fieldcat_s TYPE lvc_s_fcat.
+
+      "Função que captura a informação de tipos dos campos
+      CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+        EXPORTING
+          i_structure_name = 'ZPROJETOBS01_JM'
+        CHANGING
+          ct_fieldcat      = fieldcat.
+
+      "Dá um loop nas colunas da tabela, atribuindo seus valores em um String único
+      LOOP AT fieldcat INTO fieldcat_s.
+        CONCATENATE ls_data_tab-line fieldcat_s-reptext ';' INTO ls_data_tab-line.
+      ENDLOOP.
+
+      "Appenda o Header da tabela
+      APPEND ls_data_tab TO lt_data_tab.
+
+*     Loop para cada informação da tabela final, appendando como uma String única
+*--------------------------------------------------------------------------------
+      LOOP AT mt_saida INTO ls_saida.
+
+        ls_data_tab-line = ls_saida-pernr    && ';' "Nº pessoal
+                        && ls_saida-cname    && ';' "Nome
+                        && ls_saida-bukrs    && ';' "Empresa
+                        && ls_saida-butxt    && ';' "Nome Empresa
+                        && ls_saida-werks    && ';' "Área RH
+                        && ls_saida-name1    && ';' "Desc. RH
+                        && ls_saida-btrtl    && ';' "Sub-Área RH
+                        && ls_saida-btext    && ';' "Desc. Sub área RH
+                        && ls_saida-data     && ';'
+                        && ls_saida-tpreemb  && ';'
+                        && ls_saida-descr    && ';'
+                        && ls_saida-vlr_dia  && ';'
+                        && ls_saida-descfds  && ';'
+                        && ls_saida-diasdesc && ';'
+                        && ls_saida-dias     && ';'
+                        && ls_saida-regra    && ';'
+                        && ls_saida-opera    && ';'
+                        && ls_saida-perc     && ';'
+                        && ls_saida-vlr_men  && ';'
+                        && ls_saida-vlr_fin  && ';'
+                        && ls_saida-mes      && ';'
+                        && ls_saida-ano.
+
+        "Appenda uma String na tabela
+        APPEND ls_data_tab TO lt_data_tab.
+        CLEAR ls_data_tab.
+
+      ENDLOOP.
+
+*     Concatena o nome padrão do arquivo com a data e hora para saída
+*------------------------------------------------------------------------------------------------------------
+      CONCATENATE mv_directory '\' 'Apont Horas Extras' '_' sy-datum+6(2)'-' sy-datum+4(2) '-' sy-datum(4) '_'
+                                                            sy-uzeit(2) '-'  sy-uzeit+2(2) '-' sy-uzeit+4(2) '.csv'
+                                                            INTO lv_filename.
+
+*     Função que exporta o arquivo para o computador local
+*---------------------------------------------------------
+      CALL METHOD cl_gui_frontend_services=>gui_download
+        EXPORTING
+          filename                = lv_filename
+          show_transfer_status    = abap_false
+        CHANGING
+          data_tab                = lt_data_tab
+        EXCEPTIONS
+          file_write_error        = 1
+          no_batch                = 2
+          gui_refuse_filetransfer = 3
+          invalid_type            = 4
+          no_authority            = 5
+          unknown_error           = 6
+          header_not_allowed      = 7
+          separator_not_allowed   = 8
+          filesize_not_allowed    = 9
+          header_too_long         = 10
+          dp_error_create         = 11
+          dp_error_send           = 12
+          dp_error_write          = 13
+          unknown_dp_error        = 14
+          access_denied           = 15
+          dp_out_of_memory        = 16
+          disk_full               = 17
+          dp_timeout              = 18
+          file_not_found          = 19
+          dataprovider_exception  = 20
+          control_flush_error     = 21
+          not_supported_by_gui    = 22
+          error_no_gui            = 23
+          OTHERS                  = 24.
+
+      IF sy-subrc EQ 0.
+        MESSAGE s001(00) WITH text-m05.
+      ENDIF.
+
+    ENDIF. "Fim se o campo PATH está preenchido
+
+  ENDMETHOD.                    "converte
 
 
 * <SIGNATURE>---------------------------------------------------------------------------------------+
@@ -428,4 +586,37 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
     ENDLOOP.
 
   ENDMETHOD.                    "smart
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Static Public Method ZPROJETOBCL01_JM=>VERIFICA_DIRETORIO
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD verifica_diretorio.
+
+    DATA: lv_dir        TYPE string,
+            lv_dir_existe TYPE abap_bool.
+
+    lv_dir = mv_directory.
+
+    CALL METHOD cl_gui_frontend_services=>directory_exist
+      EXPORTING
+        directory            = lv_dir
+      RECEIVING
+        result               = lv_dir_existe
+      EXCEPTIONS
+        cntl_error           = 1
+        error_no_gui         = 2
+        wrong_parameter      = 3
+        not_supported_by_gui = 4
+        OTHERS               = 5.
+
+    IF lv_dir_existe IS INITIAL.
+      MESSAGE s208(00) WITH text-m02 DISPLAY LIKE 'E'.
+
+      "Retorna à tela de seleção
+      LEAVE LIST-PROCESSING.
+    ENDIF.
+
+  ENDMETHOD.                    "verifica_diretorio
 ENDCLASS.                    "ZPROJETOBCL01_JM IMPLEMENTATION
