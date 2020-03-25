@@ -5,10 +5,6 @@
 * Declara uma variável do tipo da classe
   DATA: go_reembolso TYPE REF TO zprojetobcl01_jm. "Classe global
 
-  "No momento que for requisitado um valor, preencherá a variável p_file
-
-
-
   START-OF-SELECTION.
 
 *     Validando campos de mês e ano
@@ -42,8 +38,10 @@
         "Chama o método que verifica se o diretório existe
       ELSE.
 
-        "Caso não exista, informa o usuário que o caminho não existe
-        zprojetobcl01_jm=>verifica_diretorio( ).
+        "Caso o caminho tenha sido preenchido, entra no método que verifica se existe
+        zprojetobcl01_jm=>verifica_diretorio(
+        IMPORTING
+          ev_directory = p_file ). "Se existir, o parameter recebe o caminho
 
       ENDIF. "Verifica se o diretório está vazio
 

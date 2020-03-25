@@ -31,7 +31,9 @@ CLASS zprojetobcl01_jm DEFINITION
     CLASS-METHODS browse_popup
       EXPORTING
         !ev_directory TYPE rlgrap-filename .
-    CLASS-METHODS verifica_diretorio .
+    CLASS-METHODS verifica_diretorio
+      EXPORTING
+        !ev_directory TYPE rlgrap-filename .
     METHODS converte .
     METHODS verifica .
   PROTECTED SECTION.
@@ -57,16 +59,11 @@ CLASS zprojetobcl01_jm DEFINITION
       CHANGING
         !cv_diasdesc TYPE zprojetobde10_jm
         !cv_dias TYPE zprojetobde11_jm .
-ENDCLASS.                    "ZPROJETOBCL01_JM DEFINITION
+ENDCLASS.
 
 
 
-*----------------------------------------------------------------------*
-*       CLASS ZPROJETOBCL01_JM IMPLEMENTATION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
-CLASS zprojetobcl01_jm IMPLEMENTATION.
+CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
 
 
 * <SIGNATURE>---------------------------------------------------------------------------------------+
@@ -135,8 +132,10 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
         not_supported_by_gui = 3
         OTHERS               = 4.
 
+    "lv_fullpath é o caminho selecionado pelo matchcode, este caminho é enviado ao parameter da tela p_file
     ev_directory = lv_fullpath.
 
+    "O caminho é salvo (somente se clicado no matchcode) em um atributo para ser utilizado na conversão
     mv_directory = ev_directory.
 
   ENDMETHOD.                    "browse_popup
@@ -195,7 +194,7 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
   METHOD converte.
 
 *     verifica se o campo path está preenchido
-*--------------------------------------------------------------
+*---------------------------------------------
     IF mv_directory IS NOT INITIAL.
 
       "Define um TYPES com saídas em formato de STRING
@@ -264,7 +263,7 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
 
 *     Concatena o nome padrão do arquivo com a data e hora para saída
 *------------------------------------------------------------------------------------------------------------
-      CONCATENATE mv_directory '\' 'Apont Horas Extras' '_' sy-datum+6(2)'-' sy-datum+4(2) '-' sy-datum(4) '_'
+      CONCATENATE mv_directory '\' 'Reembolso' '_' sy-datum+6(2)'-' sy-datum+4(2) '-' sy-datum(4) '_'
                                                             sy-uzeit(2) '-'  sy-uzeit+2(2) '-' sy-uzeit+4(2) '.csv'
                                                             INTO lv_filename.
 
@@ -302,8 +301,9 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
           error_no_gui            = 23
           OTHERS                  = 24.
 
+      "Mensagem de Sucesso ao gravar arquivo
       IF sy-subrc EQ 0.
-        MESSAGE s001(00) WITH text-m05.
+        MESSAGE s208(00) WITH text-m04.
       ENDIF.
 
     ENDIF. "Fim se o campo PATH está preenchido
@@ -610,14 +610,18 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
 * <SIGNATURE>---------------------------------------------------------------------------------------+
 * | Static Public Method ZPROJETOBCL01_JM=>VERIFICA_DIRETORIO
 * +-------------------------------------------------------------------------------------------------+
+* | [<---] EV_DIRECTORY                   TYPE        RLGRAP-FILENAME
 * +--------------------------------------------------------------------------------------</SIGNATURE>
   METHOD verifica_diretorio.
 
     DATA: lv_dir        TYPE string,
-            lv_dir_existe TYPE abap_bool.
+          lv_dir_existe TYPE abap_bool.
 
-    lv_dir = mv_directory.
+    "lv_dir recebe o caminho digitado pelo usuário
+    lv_dir = ev_directory.
 
+*     Esta função valida se o caminho digitado pelo usuário existe
+*-----------------------------------------------------------------
     CALL METHOD cl_gui_frontend_services=>directory_exist
       EXPORTING
         directory            = lv_dir
@@ -630,6 +634,7 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
         not_supported_by_gui = 4
         OTHERS               = 5.
 
+    "Se não existe, exibe mensagem de erro ao localizar diretório
     IF lv_dir_existe IS INITIAL.
       MESSAGE s208(00) WITH text-m02 DISPLAY LIKE 'E'.
 
@@ -637,5 +642,8 @@ CLASS zprojetobcl01_jm IMPLEMENTATION.
       LEAVE LIST-PROCESSING.
     ENDIF.
 
+    "Se existir, salvamos o caminho em um atributo para ser utilizado na conversão
+    mv_directory = ev_directory.
+
   ENDMETHOD.                    "verifica_diretorio
-ENDCLASS.                    "ZPROJETOBCL01_JM IMPLEMENTATION
+ENDCLASS.

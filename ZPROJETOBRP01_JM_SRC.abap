@@ -23,12 +23,14 @@ AT SELECTION-SCREEN OUTPUT.
 
   PERFORM modifica_tela.
 
+  "No momento que for requisitado um valor, preencherá a variável p_file
+
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
 
   "Chamada de método estático devido não existir instâncias de objetos
   zprojetobcl01_jm=>browse_popup(
-    IMPORTING
-      ev_directory = p_file ).
+  IMPORTING
+          ev_directory = p_file ). "Importa o caminho definido pelo usuário via matchcode (apenas se clicado)
 
 *&---------------------------------------------------------------*
 *&      Form  MODIFICA_TELA
