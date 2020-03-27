@@ -2,80 +2,58 @@
 *&  Include           ZPROJETOBRP01_JM_EVE
 *&---------------------------------------------------------------------*
 
-* Declara uma variável do tipo da classe
-  DATA: go_reembolso TYPE REF TO zprojetobcl01_jm. "Classe global
+AT SELECTION-SCREEN OUTPUT.
 
-  START-OF-SELECTION.
+  "Chamada de método estático da classe Local
+  lcl_eventos=>modifica_tela( ).
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file. "No momento que for requisitado um valor, preencherá a variável p_file
+
+  "Chamada de método estático da classe Global
+  zprojetobcl01_jm=>browse_popup(
+  IMPORTING
+          ev_directory = p_file ). "Importa o caminho definido pelo usuário via matchcode (apenas se clicado)
+
+START-OF-SELECTION.
 
 *     Validando campos de mês e ano
 *---------------------------------------------------------------------------
-    IF ( p_mes < '01' OR p_mes > '12' ) OR ( NOT p_mes CO '0123456789' ).
-      MESSAGE s208(00) WITH text-m01 DISPLAY LIKE 'E'.
-
-      "Retorna para a tela de seleção
-      LEAVE LIST-PROCESSING.
-    ENDIF.
-
-    IF ( p_ano < '2000' OR p_ano > '9999' ) OR ( NOT p_ano CO '0123456789' ).
-      MESSAGE s208(00) WITH text-m02 DISPLAY LIKE 'E'.
-
-      "Retorna para a tela de seleção
-      LEAVE LIST-PROCESSING.
-    ENDIF.
+  lcl_eventos=>valida_mes_ano( ).
 
 *     Verifica se o RADIO button de exportar arquivo está marcado
 *----------------------------------------------------------------
-    IF p_export IS NOT INITIAL.
-
-      IF p_file IS INITIAL.
-
-        "Informa o usuário que o campo está vazio
-        MESSAGE s208(00) WITH text-m03 DISPLAY LIKE 'E'.
-
-        "Retorna à tela de seleção
-        LEAVE LIST-PROCESSING.
-
-        "Chama o método que verifica se o diretório existe
-      ELSE.
-
-        "Caso o caminho tenha sido preenchido, entra no método que verifica se existe
-        zprojetobcl01_jm=>verifica_diretorio(
-        IMPORTING
-          ev_directory = p_file ). "Se existir, o parameter recebe o caminho
-
-      ENDIF. "Verifica se o diretório está vazio
-
-    ENDIF. "Verifica RADIO de Exportar
+  lcl_eventos=>verifica_radiobtn( ).
 
 *     Criação de objeto e chamada de métodos
 *------------------------------------------------------
 
-    CREATE OBJECT go_reembolso.
+  CREATE OBJECT go_reembolso.
 
-  GET peras.
+GET peras.
 
-    rp_provide_from_last p0001 space pn-begda pn-endda.
-    rp_provide_from_last p0002 space pn-begda pn-endda.
+  rp_provide_from_last p0001 space pn-begda pn-endda.
+  rp_provide_from_last p0002 space pn-begda pn-endda.
 
-    go_reembolso->processa(
-      EXPORTING
-        iv_p0001 = p0001
-        iv_p0002 = p0002
-        iv_mes   = p_mes
-        iv_ano   = p_ano ).
+  go_reembolso->processa(
+    EXPORTING
+      is_p0001 = p0001
+      is_p0002 = p0002
+      iv_mes   = p_mes
+      iv_ano   = p_ano
+      iv_flag  = lcl_eventos=>lv_flag ).
 
-  END-OF-SELECTION.
+END-OF-SELECTION.
 
 *     Prepara a exibição dos dados caso exista(m) resultado(s)
 *-------------------------------------------------------------
-    "Verifica se a tabela está vazia
-    go_reembolso->verifica( ).
+  "Verifica se a tabela está vazia
+  go_reembolso->verifica( ).
 
-    CASE abap_true.
-      WHEN p_alv.
-        go_reembolso->alv( ).
-      WHEN p_smart.
-        go_reembolso->smart( ).
-      WHEN p_export.
-        go_reembolso->converte( ).
-    ENDCASE.
+  CASE abap_true.
+    WHEN p_alv.
+      go_reembolso->alv( ).
+    WHEN p_smart.
+      go_reembolso->smart( ).
+    WHEN p_export.
+      go_reembolso->converte( ).
+  ENDCASE.

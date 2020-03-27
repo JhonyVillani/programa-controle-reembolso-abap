@@ -22,10 +22,11 @@ CLASS zprojetobcl01_jm DEFINITION
     METHODS constructor .
     METHODS processa
       IMPORTING
-        !iv_p0001 TYPE p0001
-        !iv_p0002 TYPE p0002
+        !is_p0001 TYPE p0001
+        !is_p0002 TYPE p0002
         !iv_ano TYPE char4
-        !iv_mes TYPE char2 .
+        !iv_mes TYPE char2
+        !iv_flag TYPE flag .
     METHODS alv .
     METHODS smart .
     CLASS-METHODS browse_popup
@@ -44,11 +45,11 @@ CLASS zprojetobcl01_jm DEFINITION
     DATA mt_zprojetobt02 TYPE ty_zprojetobt02 .
     DATA mt_zprojetobt03 TYPE ty_zprojetobt03 .
     DATA:
-      mt_t001  TYPE TABLE OF t001 .                   "Descrição empresas
+      mt_t001  TYPE TABLE OF t001 .                     "Descrição empresas
     DATA:
-      mt_t500p TYPE TABLE OF t500p .                   "Descrição área de RH
+      mt_t500p TYPE TABLE OF t500p .                     "Descrição área de RH
     DATA:
-      mt_t001p TYPE TABLE OF t001p .                   "Descrição subárea de RH
+      mt_t001p TYPE TABLE OF t001p .                     "Descrição subárea de RH
     CLASS-DATA mv_directory TYPE rlgrap-filename .
 
     METHODS processar_dias
@@ -59,11 +60,16 @@ CLASS zprojetobcl01_jm DEFINITION
       CHANGING
         !cv_diasdesc TYPE zprojetobde10_jm
         !cv_dias TYPE zprojetobde11_jm .
-ENDCLASS.
+ENDCLASS.                    "ZPROJETOBCL01_JM DEFINITION
 
 
 
-CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
+*----------------------------------------------------------------------*
+*       CLASS ZPROJETOBCL01_JM IMPLEMENTATION
+*----------------------------------------------------------------------*
+*
+*----------------------------------------------------------------------*
+CLASS zprojetobcl01_jm IMPLEMENTATION.
 
 
 * <SIGNATURE>---------------------------------------------------------------------------------------+
@@ -314,10 +320,11 @@ CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
 * <SIGNATURE>---------------------------------------------------------------------------------------+
 * | Instance Public Method ZPROJETOBCL01_JM->PROCESSA
 * +-------------------------------------------------------------------------------------------------+
-* | [--->] IV_P0001                       TYPE        P0001
-* | [--->] IV_P0002                       TYPE        P0002
+* | [--->] IS_P0001                       TYPE        P0001
+* | [--->] IS_P0002                       TYPE        P0002
 * | [--->] IV_ANO                         TYPE        CHAR4
 * | [--->] IV_MES                         TYPE        CHAR2
+* | [--->] IV_FLAG                        TYPE        FLAG
 * +--------------------------------------------------------------------------------------</SIGNATURE>
   METHOD processa.
 
@@ -335,7 +342,7 @@ CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
 
     LOOP AT mt_zprojetobt03 INTO ms_zprojetobt03.
 
-      IF iv_p0001-bukrs NE ms_zprojetobt03-bukrs.
+      IF is_p0001-bukrs NE ms_zprojetobt03-bukrs.
         CONTINUE.
       ENDIF.
 
@@ -348,20 +355,20 @@ CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
       READ TABLE mt_zprojetobt02 INTO ms_zprojetobt02 WITH KEY regra = ms_zprojetobt03-regra. "Regras de Reembolso
 
       CLEAR ms_t500p.
-      READ TABLE mt_t500p INTO ms_t500p WITH KEY bukrs = iv_p0001-bukrs "Desc Área de RH
-                                                 persa = iv_p0001-werks.
+      READ TABLE mt_t500p INTO ms_t500p WITH KEY bukrs = is_p0001-bukrs "Desc Área de RH
+                                                 persa = is_p0001-werks.
       CLEAR ms_t001p.
-      READ TABLE mt_t001p INTO ms_t001p WITH KEY werks = iv_p0001-werks. "Desc Sub RH
+      READ TABLE mt_t001p INTO ms_t001p WITH KEY werks = is_p0001-werks. "Desc Sub RH
 
-      ms_saida-pernr   = iv_p0001-pernr.
-      ms_saida-cname   = iv_p0002-cname.
-      ms_saida-bukrs   = iv_p0001-bukrs.
+      ms_saida-pernr   = is_p0001-pernr.
+      ms_saida-cname   = is_p0002-cname.
+      ms_saida-bukrs   = is_p0001-bukrs.
 
 *     Função que substitui READ TABLE na tabela t001 (Descrição Empresas)
 *------------------------------------------------------------------------
       CALL FUNCTION 'HR_BR_LER_EMPRESA'
         EXPORTING
-          company_code            = iv_p0001-bukrs
+          company_code            = is_p0001-bukrs
 *         LANGUAGE                = SY-LANGU
         IMPORTING
           company_name            = ms_saida-butxt
@@ -371,9 +378,9 @@ CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
           cgc_contains_characters = 2
           OTHERS                  = 3.
 
-      ms_saida-werks   = iv_p0001-werks.
+      ms_saida-werks   = is_p0001-werks.
       ms_saida-name1   = ms_t500p-name1.
-      ms_saida-btrtl   = iv_p0001-btrtl.
+      ms_saida-btrtl   = is_p0001-btrtl.
       ms_saida-btext   = ms_t001p-btext.
       ms_saida-data    = sy-datum.
       ms_saida-tpreemb = ms_zprojetobt01-tpreemb.
@@ -404,8 +411,10 @@ CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
         ms_saida-vlr_fin = ms_saida-vlr_men - ( ms_saida-vlr_men * ( ms_zprojetobt02-perc / 100 ) ).
       ENDIF.
 
-      ms_saida-mes     = iv_mes.
-      ms_saida-ano     = iv_ano.
+      IF iv_flag EQ abap_false.
+        ms_saida-mes     = iv_mes.
+        ms_saida-ano     = iv_ano.
+      ENDIF.
 
       APPEND ms_saida TO mt_saida.
     ENDLOOP.
@@ -474,9 +483,6 @@ CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
       "Retorna para a tela de seleção
       LEAVE LIST-PROCESSING.
 
-*    RAISE EXCEPTION TYPE lcx_erro_fatal
-*      EXPORTING
-*        iv_codigo = '005'.
     ENDIF.
 
     CALL FUNCTION 'NUMBER_OF_DAYS_PER_MONTH_GET'
@@ -516,14 +522,14 @@ CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
           ls_job_output_info    TYPE ssfcrescl,
           ls_saida              TYPE zprojetobs01_jm. "Do tipo da estrutura SE11 criada para exibição
 
+*     Declarações de variáveis a serem utilizadas no Case que verifica a quantidade de páginas via LOOP
+*------------------------------------------------------------------------------------------------------
+    DATA: lv_lines TYPE i,
+          lv_tabix TYPE sy-tabix.
+
 *     Loop na tabela final (Enviando dados via WORK-AREA para o Smartform)
 *-------------------------------------------------------------------------------------------------------
     LOOP AT mt_saida INTO ls_saida.
-
-*     Declarações de variáveis a serem utilizadas no Case que verifica a quantidade de páginas via LOOP
-*------------------------------------------------------------------------------------------------------
-      DATA: lv_lines TYPE i,
-            lv_tabix TYPE sy-tabix.
 
       "Atribuição de contador
       lv_tabix = sy-tabix.
@@ -646,4 +652,4 @@ CLASS ZPROJETOBCL01_JM IMPLEMENTATION.
     mv_directory = ev_directory.
 
   ENDMETHOD.                    "verifica_diretorio
-ENDCLASS.
+ENDCLASS.                    "ZPROJETOBCL01_JM IMPLEMENTATION

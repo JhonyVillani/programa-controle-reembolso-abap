@@ -7,4 +7,6 @@ INFOTYPES: 0001,
 
 TABLES pernr.
 
+DATA: go_reembolso TYPE REF TO zprojetobcl01_jm. "Classe global
+
 NODES peras.
